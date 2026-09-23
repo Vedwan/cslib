@@ -1,0 +1,83 @@
+import Mathlib
+
+namespace MultiCA
+
+universe u
+
+abbrev Point (d : ℕ) := Fin d → ℤ
+abbrev Config (d : ℕ) (α : Type u) := Point d → α
+
+def shift {d : ℕ} {α : Type u} (v : Point d)
+    (c : Config d α) (x : Point d) : α :=
+  c (x + v)
+
+structure CA (d : ℕ) (α : Type u) where
+  neighborhood : Finset (Point d)
+  rule : (neighborhood → α) → α
+
+namespace CA
+
+variable {d : ℕ} {α : Type u}
+
+def localView (A : CA d α) (c : Config d α)
+    (x : Point d) (n : A.neighborhood) : α :=
+  c (x + n.1)
+
+def step (A : CA d α) (c : Config d α) (x : Point d) : α :=
+  A.rule (A.localView c x)
+
+def AgreeAt (A : CA d α) (c₁ c₂ : Config d α)
+    (x : Point d) : Prop :=
+  ∀ n : A.neighborhood, c₁ (x + n.1) = c₂ (x + n.1)
+
+theorem step_eq_of_agreeAt (A : CA d α)
+    {c₁ c₂ : Config d α} {x : Point d}
+    (h : A.AgreeAt c₁ c₂ x) :
+    A.step c₁ x = A.step c₂ x := by
+  apply congrArg A.rule
+  funext n
+  exact h n
+
+@[simp]
+theorem localView_shift (A : CA d α) (v : Point d)
+    (c : Config d α) (x : Point d) :
+    A.localView (shift v c) x = A.localView c (x + v) := by
+  funext n
+  change c ((x + n.1) + v) = c ((x + v) + n.1)
+  rw [add_right_comm]
+
+theorem step_shift (A : CA d α) (v : Point d)
+    (c : Config d α) :
+    A.step (shift v c) = shift v (A.step c) := by
+  funext x
+  change A.rule (A.localView (shift v c) x) =
+    A.rule (A.localView c (x + v))
+  rw [localView_shift]
+
+def evolve (A : CA d α) : ℕ → Config d α → Config d α
+  | 0, c => c
+  | Nat.succ n, c => A.step (A.evolve n c)
+
+@[simp]
+theorem evolve_zero (A : CA d α) (c : Config d α) :
+    A.evolve 0 c = c :=
+  rfl
+
+@[simp]
+theorem evolve_succ (A : CA d α) (n : ℕ)
+    (c : Config d α) :
+    A.evolve (Nat.succ n) c = A.step (A.evolve n c) :=
+  rfl
+
+theorem evolve_shift (A : CA d α) (n : ℕ)
+    (v : Point d) (c : Config d α) :
+    A.evolve n (shift v c) = shift v (A.evolve n c) := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+      change A.step (A.evolve n (shift v c)) =
+        shift v (A.step (A.evolve n c))
+      rw [ih, step_shift]
+
+end CA
+end MultiCA
