@@ -1,0 +1,131 @@
+import Mathlib
+
+namespace MultiCA
+
+universe u
+
+abbrev Point (d : ℕ) := Fin d → ℤ
+
+abbrev Config (d : ℕ) (State : Type u) :=
+  Point d → State
+
+def shift {d : ℕ} {State : Type u}
+    (v : Point d)
+    (c : Config d State) :
+    Config d State :=
+  fun x => c (x + v)
+
+structure CA (d : ℕ) (State : Type u) where
+  neighborhood : Finset (Point d)
+  localRule : (neighborhood → State) → State
+
+namespace CA
+
+variable {d : ℕ}
+variable {State : Type u}
+
+def localView
+    (A : CA d State)
+    (c : Config d State)
+    (x : Point d) :
+    A.neighborhood → State :=
+  fun n => c (x + n.1)
+
+def step
+    (A : CA d State)
+    (c : Config d State) :
+    Config d State :=
+  fun x =>
+    A.localRule (A.localView c x)
+
+def AgreeLocally
+    (A : CA d State)
+    (c₁ c₂ : Config d State)
+    (x : Point d) : Prop :=
+  ∀ n : A.neighborhood,
+    c₁ (x + n.1) = c₂ (x + n.1)
+
+theorem step_eq_of_agreeLocally
+    (A : CA d State)
+    {c₁ c₂ : Config d State}
+    {x : Point d}
+    (h : A.AgreeLocally c₁ c₂ x) :
+    A.step c₁ x = A.step c₂ x := by
+  unfold step
+  apply congrArg A.localRule
+  funext n
+  exact h n
+
+@[simp]
+theorem localView_shift
+    (A : CA d State)
+    (v : Point d)
+    (c : Config d State)
+    (x : Point d) :
+    A.localView (shift v c) x =
+      A.localView c (x + v) := by
+  funext n
+  change
+    c ((x + n.1) + v) =
+      c ((x + v) + n.1)
+  rw [add_right_comm]
+
+theorem step_shift
+    (A : CA d State)
+    (v : Point d)
+    (c : Config d State) :
+    A.step (shift v c) =
+      shift v (A.step c) := by
+  funext x
+  change
+    A.localRule (A.localView (shift v c) x) =
+      A.localRule (A.localView c (x + v))
+  rw [localView_shift]
+
+def evolve
+    (A : CA d State) :
+    ℕ → Config d State → Config d State
+  | 0, c => c
+  | Nat.succ n, c =>
+      A.step (evolve A n c)
+
+@[simp]
+theorem evolve_zero
+    (A : CA d State)
+    (c : Config d State) :
+    A.evolve 0 c = c :=
+  rfl
+
+@[simp]
+theorem evolve_succ
+    (A : CA d State)
+    (n : ℕ)
+    (c : Config d State) :
+    A.evolve (n + 1) c =
+      A.step (A.evolve n c) := by
+  rfl
+
+theorem evolve_shift
+    (A : CA d State)
+    (n : ℕ)
+    (v : Point d)
+    (c : Config d State) :
+    A.evolve n (shift v c) =
+      shift v (A.evolve n c) := by
+  induction n with
+  | zero =>
+      rfl
+  | succ n ih =>
+      change
+        A.step (A.evolve n (shift v c)) =
+          shift v (A.step (A.evolve n c))
+      rw [ih]
+      exact A.step_shift v (A.evolve n c)
+
+end CA
+
+abbrev CA1D (State : Type u) := CA 1 State
+abbrev CA2D (State : Type u) := CA 2 State
+abbrev CA3D (State : Type u) := CA 3 State
+
+end MultiCA
